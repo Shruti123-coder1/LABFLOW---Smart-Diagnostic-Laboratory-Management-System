@@ -16,7 +16,7 @@ import {
   type SampleDocument,
 } from '../api/samples';
 import { listBookings, type CreatedBooking } from '../api/bookings';
-import { listPatients, type CreatedPatient } from '../api/patients';
+import { getPatientSummary, type PatientSummary } from '../api/patients';
 
 const columns = [
   { key: 'collected', title: 'Collected' },
@@ -44,11 +44,11 @@ const initialSampleForm: Omit<CreateSampleDto, 'handledBy'> = {
 };
 
 export function SampleTracking() {
-  const { user, role } = useAuth();
+  const { user } = useAuth();
   const handledBy = user?.name ?? 'Lab staff';
   const [samples, setSamples] = useState<GroupedSamples>(emptySamples);
   const [bookings, setBookings] = useState<CreatedBooking[]>([]);
-  const [patients, setPatients] = useState<CreatedPatient[]>([]);
+  const [patients, setPatients] = useState<PatientSummary[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [bookingsError, setBookingsError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -81,13 +81,16 @@ export function SampleTracking() {
       setBookingsLoading(true);
       setBookingsError('');
       try {
-        const [loadedBookings, loadedPatients] = await Promise.all([
-          listBookings(),
-          role === 'Admin' ? listPatients() : Promise.resolve([]),
-        ]);
+        const loadedBookings = await listBookings();
         if (!active) return;
-        setBookings(loadedBookings.filter((booking) => booking.status === 'pending' || booking.status === 'confirmed'));
-        setPatients(loadedPatients);
+        const awaiting = loadedBookings.filter((booking) => booking.status === 'pending' || booking.status === 'confirmed');
+        setBookings(awaiting);
+
+        // Fetch only id + name for each distinct patient; works for every lab role, not just Admin.
+        const patientIds = [...new Set(awaiting.map((booking) => booking.patientId).filter(Boolean))];
+        const results = await Promise.allSettled(patientIds.map((id) => getPatientSummary(id)));
+        if (!active) return;
+        setPatients(results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])));
       } catch (error) {
         if (active) setBookingsError(error instanceof Error ? error.message : 'Unable to load bookings awaiting collection.');
       } finally {
@@ -96,7 +99,7 @@ export function SampleTracking() {
     }
     void loadBookingsAwaitingCollection();
     return () => { active = false; };
-  }, [role]);
+  }, []);
 
   const openSampleFormForBooking = (booking: CreatedBooking) => {
     const patient = patients.find((item) => item._id === booking.patientId);

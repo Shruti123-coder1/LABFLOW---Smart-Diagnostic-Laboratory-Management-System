@@ -44,6 +44,26 @@ export async function listPatients(search?: string): Promise<CreatedPatient[]> {
   }
 }
 
+export interface PatientSummary {
+  _id: string;
+  patientId: string;
+  fullName: string;
+}
+
+export async function getPatientSummary(id: string): Promise<PatientSummary> {
+  try {
+    const { data } = await client.get<PatientSummary>(`/patients/${encodeURIComponent(id)}/summary`);
+    return data;
+  } catch (error) {
+    if (isAxiosError(error)) {
+      const message = error.response?.data?.message;
+      throw new Error(typeof message === 'string' ? message : 'Unable to load patient summary. Please try again.');
+    }
+
+    throw error;
+  }
+}
+
 export async function createPatient(payload: CreatePatientDto): Promise<CreatedPatient> {
   try {
     const { data } = await client.post<CreatedPatient>('/patients', payload);

@@ -66,6 +66,15 @@ export class PatientController {
     return this.patientService.removeByUserId(userId);
   }
 
+  @Get(':id/summary')
+  @InternalService()
+  @Roles('admin', 'receptionist', 'doctor', 'technician', 'lab_technician')
+  @ApiOperation({ summary: 'Get a minimal patient summary (ID and name only) for laboratory workflows' })
+  async findSummary(@Param('id') id: string) {
+    const patient = await this.patientService.findOne(id);
+    return { _id: String(patient._id), patientId: patient.patientId, fullName: patient.fullName };
+  }
+
   @Get(':id/details')
   @Roles('admin', 'receptionist')
   @ApiOperation({ summary: 'Get role-filtered Patient 360 details for an administrator or receptionist' })
